@@ -12,9 +12,12 @@ module Diff
 	, diffArrays
 	) where
 
+import Prelude (class Show)
+
 import Data.Foreign            (Foreign, toForeign)
 import Data.Foreign.Undefined  (writeUndefined)
 import Data.Function.Uncurried (Fn3, runFn3)
+import Data.Generic            (class Generic, gShow)
 import Data.Maybe              (Maybe(Just))
 
 type FnDiff = Fn3 Foreign String String (Array Diff)
@@ -36,6 +39,11 @@ newtype Options = Options
 	{ ignoreWhiteSpace :: Boolean
 	, newlineIsToken   :: Boolean
 	}
+
+derive instance genericOptions :: Generic Options
+
+instance showOptions :: Show Options where
+	show = gShow
 
 diff :: FnDiff -> Diff'
 diff fn (Just (Options o)) oldStr newStr = runFn3 fn (toForeign o)  oldStr newStr
