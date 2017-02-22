@@ -1,0 +1,20 @@
+{
+  "name": "purescript-js-diff",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "output"
+  ],
+  "dependencies": {
+    "jsdiff": "^3.2.0",
+    "purescript-prelude": "^2.4.0",
+    "purescript-functions": "^2.0.0",
+    "purescript-foreign": "^3.2.0",
+    "purescript-maybe": "^2.0.1"
+  },
+  "devDependencies": {
+    "purescript-console": "^2.0.0",
+    "purescript-psci-support": "^2.0.0"
+  }
+}
