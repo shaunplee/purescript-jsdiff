@@ -1,9 +1,10 @@
 module Diff
-	( DiffOptions(DiffOptions)
+	( Modification(Removed, Unchanged, Added, Meta)
+	, Diff(Diff)
+	, DiffOptions(DiffOptions)
+	, Hunk(Hunk)
+	, Patch(Patch)
 	, PatchOptions(PatchOptions)
-	, Diff
-	, Modification
-	, Patch
 	, diffChars
 	, diffWords
 	, diffWordsWithSpace
@@ -16,6 +17,9 @@ module Diff
 	, createTwoFilesPatch
 	, createPatch
 	, structuredPatch
+	, applyPatch
+	, parsePatch
+	, convertChangesToXML
 	) where
 
 import Prelude
@@ -69,6 +73,8 @@ foreign import structuredPatchImpl     :: Fn7 String String String String String
 foreign import applyPatchImpl          :: Fn3 String Foreign Foreign String
 foreign import parsePatchImpl          :: forall a b. Fn3 (a -> Either a b) (b -> Either a b) String (Either Error Foreign)
 foreign import convertChangesToXMLImpl :: Array Diff -> String
+
+-- XXX Document types.
 
 -- I have no idea if `Meta` is actually what it's called, or if it's even a
 -- part of the Unified Diff format, but jsdiff uses it, so we use it; we'll
@@ -282,13 +288,13 @@ diffArrays options oldArr newArr = processDiffs $
 -- | Creates a unified diff patch string.
 -- |
 -- | Parameters:
--- | - options: An object with options. Currently, only context is supported and describes how many lines of context should be included.
--- | - oldFileName: String to be output in the filename section of the patch for the removals.
--- | - newFileName: String to be output in the filename section of the patch for the additions.
--- | - oldStr: Original string value.
--- | - newStr: New string value.
--- | - oldHeader: Additional information to include in the old file header.
--- | - newHeader: Additional information to include in the new file header.
+-- | - `options`: An object with options. Currently, only context is supported and describes how many lines of context should be included.
+-- | - `oldFileName`: String to be output in the filename section of the patch for the removals.
+-- | - `newFileName`: String to be output in the filename section of the patch for the additions.
+-- | - `oldStr`: Original string value.
+-- | - `newStr`: New string value.
+-- | - `oldHeader`: Additional information to include in the old file header.
+-- | - `newHeader`: Additional information to include in the new file header.
 createTwoFilesPatch :: Maybe PatchOptions ->
 		       String             ->
 		       String             ->
@@ -303,12 +309,12 @@ createTwoFilesPatch options oldFileName newFileName oldStr newStr oldHeader newH
 -- | Creates a unified diff patch string.
 -- |
 -- | Parameters:
--- | - options: An object with options. Currently, only context is supported and describes how many lines of context should be included.
--- | - fileName: String to be output in the filename section of the patch for the removals and additions.
--- | - oldStr: Original string value.
--- | - newStr: New string value.
--- | - oldHeader: Additional information to include in the old file header.
--- | - newHeader: Additional information to include in the new file header.
+-- | - `options`: An object with options. Currently, only context is supported and describes how many lines of context should be included.
+-- | - `fileName`: String to be output in the filename section of the patch for the removals and additions.
+-- | - `oldStr`: Original string value.
+-- | - `newStr`: New string value.
+-- | - `oldHeader`: Additional information to include in the old file header.
+-- | - `newHeader`: Additional information to include in the new file header.
 createPatch :: Maybe PatchOptions ->
 	       String             ->
 	       String             ->
@@ -322,13 +328,13 @@ createPatch options fileName oldStr newStr oldHeader newHeader =
 -- | Returns a raw Patch.
 -- |
 -- | Parameters:
--- | - options: An object with options. Currently, only context is supported and describes how many lines of context should be included.
--- | - oldFileName: String to be output in the filename section of the patch for the removals.
--- | - newFileName: String to be output in the filename section of the patch for the additions.
--- | - oldStr: Original string value.
--- | - newStr: New string value.
--- | - oldHeader: Additional information to include in the old file header.
--- | - newHeader: Additional information to include in the new file header.
+-- | - `options`: An object with options. Currently, only context is supported and describes how many lines of context should be included.
+-- | - `oldFileName`: String to be output in the filename section of the patch for the removals.
+-- | - `newFileName`: String to be output in the filename section of the patch for the additions.
+-- | - `oldStr`: Original string value.
+-- | - `newStr`: New string value.
+-- | - `oldHeader`: Additional information to include in the old file header.
+-- | - `newHeader`: Additional information to include in the new file header.
 structuredPatch :: Maybe PatchOptions -> String -> String -> String -> String -> String -> String -> Patch
 structuredPatch options oldFileName newFileName oldStr newStr oldHeader newHeader = processPatch $
 	runFn7 structuredPatchImpl oldFileName newFileName oldStr newStr oldHeader newHeader $ patchOptionsToForeign options
@@ -339,8 +345,8 @@ structuredPatch options oldFileName newFileName oldStr newStr oldHeader newHeade
 -- | string diff or the output from the parsePatch or structuredPatch methods.
 -- |
 -- | The optional options object may have the following keys:
--- | - fuzzFactor: Number of lines that are allowed to differ before rejecting a patch. Defaults to 0.
--- | - compareLine(lineNumber, line, operation, patchContent): Callback used to compare to given lines to determine if they should be considered equal when patching. Defaults to strict equality but may be overriden to provide fuzzier comparison. Should return false if the lines should be rejected.
+-- | - `fuzzFactor`: Number of lines that are allowed to differ before rejecting a patch. Defaults to 0.
+-- | - `compareLine(lineNumber, line, operation, patchContent)`: Callback used to compare to given lines to determine if they should be considered equal when patching. Defaults to strict equality but may be overriden to provide fuzzier comparison. Should return false if the lines should be rejected.
 applyPatch :: Maybe ApplyOptions -> String -> Either String Patch -> String
 applyPatch options source (Left diffString) =
 	runFn3 applyPatchImpl source (toForeign diff) (applyOptionsToForeign options)
@@ -353,7 +359,7 @@ applyPatch options source (Right patch) =
 parsePatch :: String -> Either Error Patch
 parsePatch diffString = map processPatch $ runFn3 parsePatchImpl Left Right diffString
 
--- | Converts a list of changes to a serialized XML format
+-- | Converts a list of changes to a serialized XML format.
 convertChangesToXML :: Array Diff -> String
 convertChangesToXML = convertChangesToXMLImpl
 
