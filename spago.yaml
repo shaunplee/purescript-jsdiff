@@ -1,0 +1,10 @@
+package:
+  dependencies:
+    - console
+    - effect
+    - prelude
+  name: jsdiff
+workspace:
+  extraPackages: {}
+  packageSet:
+    url: https://raw.githubusercontent.com/purescript/package-sets/psc-0.15.15-20240701/packages.json
