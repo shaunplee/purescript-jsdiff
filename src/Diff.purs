@@ -1,77 +1,58 @@
 module Diff
-	( Modification(Removed, Unchanged, Added, Meta)
-	, Diff(Diff)
-	, DiffOptions(DiffOptions)
-	, Hunk(Hunk)
-	, Patch(Patch)
-	, PatchOptions(PatchOptions)
-	, diffChars
-	, diffWords
-	, diffWordsWithSpace
-	, diffLines
-	, diffTrimmedLines
-	, diffSentences
-	, diffCSS
-	, diffJSON
-	, diffArrays
-	, createTwoFilesPatch
-	, createPatch
-	, structuredPatch
-	, applyPatch
-	, parsePatch
-	, convertChangesToXML
-	) where
+  ( Modification(Removed, Unchanged, Added, Meta)
+  , Diff(Diff)
+  , DiffOptions(DiffOptions)
+  , Hunk(Hunk)
+  , Patch(Patch)
+  , PatchOptions(PatchOptions)
+  , diffChars
+  , diffWords
+  , diffWordsWithSpace
+  , diffLines
+  , diffTrimmedLines
+  , diffSentences
+  , diffCSS
+  , diffJSON
+  , diffArrays
+  , createTwoFilesPatch
+  , createPatch
+  , structuredPatch
+  , applyPatch
+  , parsePatch
+  , convertChangesToXML
+  ) where
 
 import Prelude
-	( class Eq
-	, class Ord
-	, class Show
-	, Ordering(EQ, GT, LT)
-	, map
-	, show
-	, ($)
-	, (<>)
-	)
 
-import Control.Monad.Eff.Exception (Error)
-import Data.Either                 (Either(Left, Right))
-import Data.Foreign                (Foreign, toForeign, writeObject)
-import Data.Foreign.Class          (class AsForeign, write, (.=))
-import Data.Foreign.Undefined      (writeUndefined)
-import Data.Function.Uncurried
-	( Fn2
-	, Fn3
-	, Fn5
-	, Fn6
-	, Fn7
-	, runFn2
-	, runFn3
-	, runFn5
-	, runFn6
-	, runFn7
-	)
-import Data.Generic                (class Generic, gCompare, gEq, gShow)
-import Data.Maybe                  (Maybe, maybe)
-import Partial.Unsafe              (unsafePartialBecause)
+import Data.Either (Either(Left, Right))
+import Data.Eq.Generic (genericEq)
+import Data.Function.Uncurried (Fn2, Fn3, Fn5, Fn6, Fn7, runFn2, runFn3, runFn5, runFn6, runFn7)
+import Data.Generic.Rep (class Generic)
+import Data.Maybe (Maybe, maybe)
+import Data.Ord.Generic (genericCompare)
+import Data.Show.Generic (genericShow)
+import Effect.Exception (Error)
+import Foreign (Foreign, unsafeToForeign)
+import Partial.Unsafe (unsafeCrashWith)
 
 foreign import processDiffsImpl :: Fn5 Modification Modification Modification ({ value :: String, modification :: Modification, count :: Int } -> Diff) (Array Foreign) (Array Diff)
 foreign import processPatchImpl :: Fn3 ({ oldStart :: Int, oldLines :: Int, newStart :: Int, newLines :: Int, lines :: Array String } -> Hunk) ({ oldFileName :: String, newFileName :: String, oldHeader :: String, newHeader :: String, hunks :: Array Hunk } -> Patch) Foreign Patch
 foreign import convertCompareLineImpl :: Fn2 (String -> Modification) (Int -> String -> Modification -> String -> Boolean) Foreign
 
-foreign import diffCharsImpl           :: Fn3 String String Foreign (Array Foreign)
-foreign import diffWordsImpl           :: Fn3 String String Foreign (Array Foreign)
-foreign import diffWordsWithSpaceImpl  :: Fn3 String String Foreign (Array Foreign)
-foreign import diffLinesImpl           :: Fn3 String String Foreign (Array Foreign)
-foreign import diffTrimmedLinesImpl    :: Fn3 String String Foreign (Array Foreign)
-foreign import diffSentencesImpl       :: Fn3 String String Foreign (Array Foreign)
-foreign import diffCSSImpl             :: Fn3 String String Foreign (Array Foreign)
-foreign import diffJSONImpl            :: Fn3 Foreign Foreign Foreign (Array Foreign)
-foreign import diffArraysImpl          :: Fn3 (Array Foreign) (Array Foreign) Foreign (Array Foreign)
+foreign import diffCharsImpl :: Fn3 String String Foreign (Array Foreign)
+foreign import diffWordsImpl :: Fn3 String String Foreign (Array Foreign)
+foreign import diffWordsWithSpaceImpl :: Fn3 String String Foreign (Array Foreign)
+foreign import diffLinesImpl :: Fn3 String String Foreign (Array Foreign)
+foreign import diffTrimmedLinesImpl :: Fn3 String String Foreign (Array Foreign)
+foreign import diffSentencesImpl :: Fn3 String String Foreign (Array Foreign)
+foreign import diffCSSImpl :: Fn3 String String Foreign (Array Foreign)
+foreign import diffJSONImpl :: Fn3 Foreign Foreign Foreign (Array Foreign)
+foreign import diffArraysImpl :: Fn3 (Array Foreign) (Array Foreign) Foreign (Array Foreign)
 foreign import createTwoFilesPatchImpl :: Fn7 String String String String String String Foreign String
-foreign import createPatchImpl         :: Fn6 String String String String String Foreign String
-foreign import structuredPatchImpl     :: Fn7 String String String String String String Foreign Foreign
-foreign import applyPatchImpl          :: Fn3 String Foreign Foreign String
-foreign import parsePatchImpl          :: forall a b. Fn3 (a -> Either a b) (b -> Either a b) String (Either Error Foreign)
+foreign import createPatchImpl :: Fn6 String String String String String Foreign String
+foreign import structuredPatchImpl :: Fn7 String String String String String String Foreign Foreign
+foreign import applyPatchImpl :: Fn3 String Foreign Foreign String
+foreign import parsePatchImpl :: forall a b. Fn3 (a -> Either a b) (b -> Either a b) String (Either Error Foreign)
 foreign import convertChangesToXMLImpl :: Array Diff -> String
 
 -- XXX Document types.
@@ -85,164 +66,167 @@ data Modification = Removed | Unchanged | Added | Meta
 derive instance genericModification :: Generic Modification
 
 instance showModification :: Show Modification where
-	show   Removed = "(Removed)"
-	show Unchanged = "(Unchanged)"
-	show     Added = "(Added)"
-	show     Meta  = "(Meta)"
+  show Removed = "(Removed)"
+  show Unchanged = "(Unchanged)"
+  show Added = "(Added)"
+  show Meta = "(Meta)"
 
 instance eqModification :: Eq Modification where
-	eq   Removed   Removed = true
-	eq Unchanged Unchanged = true
-	eq     Added     Added = true
-	eq      Meta      Meta = true
-	eq         _         _ = false
+  eq Removed Removed = true
+  eq Unchanged Unchanged = true
+  eq Added Added = true
+  eq Meta Meta = true
+  eq _ _ = false
 
 instance ordModification :: Ord Modification where
-	compare   Removed   Removed = EQ
-	compare Unchanged Unchanged = EQ
-	compare     Added     Added = EQ
-	compare      Meta      Meta = EQ
-	compare   Removed         _ = LT
-	compare Unchanged   Removed = GT
-	compare Unchanged         _ = LT
-	compare     Added      Meta = LT
-	compare     Added         _ = GT
-	compare      Meta         _ = GT
+  compare Removed Removed = EQ
+  compare Unchanged Unchanged = EQ
+  compare Added Added = EQ
+  compare Meta Meta = EQ
+  compare Removed _ = LT
+  compare Unchanged Removed = GT
+  compare Unchanged _ = LT
+  compare Added Meta = LT
+  compare Added _ = GT
+  compare Meta _ = GT
 
 newtype Diff = Diff
-	{ value        :: String
-	, modification :: Modification
-	, count        :: Int
-	}
+  { value :: String
+  , modification :: Modification
+  , count :: Int
+  }
 
 derive instance genericDiff :: Generic Diff
 
 instance showDiff :: Show Diff where
-	show = gShow
+  show = genericShow
 
 instance eqDiff :: Eq Diff where
-	eq = gEq
+  eq = genericEq
 
 instance ordDiff :: Ord Diff where
-	compare = gCompare
+  compare = genericCompare
 
 newtype DiffOptions = DiffOptions
-	{ ignoreWhiteSpace :: Boolean
-	, newlineIsToken   :: Boolean
-	}
+  { ignoreWhiteSpace :: Boolean
+  , newlineIsToken :: Boolean
+  }
 
 derive instance genericDiffOptions :: Generic DiffOptions
 
 instance showDiffOptions :: Show DiffOptions where
-	show = gShow
+  show = genericShow
 
 newtype Hunk = Hunk
-	{ oldStart :: Int
-	, oldLines :: Int
-	, newStart :: Int
-	, newLines :: Int
-	, lines    :: Array String
-	}
+  { oldStart :: Int
+  , oldLines :: Int
+  , newStart :: Int
+  , newLines :: Int
+  , lines :: Array String
+  }
 
 derive instance genericHunk :: Generic Hunk
 
 instance showHunk :: Show Hunk where
-	show = gShow
+  show = genericShow
 
 instance eqHunk :: Eq Hunk where
-	eq = gEq
+  eq = genericEq
 
 instance ordHunk :: Ord Hunk where
-	compare = gCompare
+  compare = genericCompare
 
 instance asForeignHunk :: AsForeign Hunk where
-	write (Hunk h) = writeObject
-		[ "oldStart" .= h.oldStart
-		, "oldLines" .= h.oldLines
-		, "newStart" .= h.newStart
-		, "newLines" .= h.newLines
-		, "lines"    .= h.lines
-		]
+  write (Hunk h) = writeObject
+    [ "oldStart" .= h.oldStart
+    , "oldLines" .= h.oldLines
+    , "newStart" .= h.newStart
+    , "newLines" .= h.newLines
+    , "lines" .= h.lines
+    ]
 
 newtype Patch = Patch
-	{ oldFileName :: String
-	, newFileName :: String
-	, oldHeader   :: String
-	, newHeader   :: String
-	, hunks       :: Array Hunk
-	}
+  { oldFileName :: String
+  , newFileName :: String
+  , oldHeader :: String
+  , newHeader :: String
+  , hunks :: Array Hunk
+  }
 
 derive instance genericPatch :: Generic Patch
 
 instance showPatch :: Show Patch where
-	show = gShow
+  show = genericShow
 
 instance eqPatch :: Eq Patch where
-	eq = gEq
+  eq = genericEq
 
 instance ordPatch :: Ord Patch where
-	compare = gCompare
+  compare = genericCompare
 
 instance asForeignPatch :: AsForeign Patch where
-	write (Patch p) = writeObject
-		[ "oldFileName" .= p.oldFileName
-		, "newFileName" .= p.newFileName
-		, "oldHeader"   .= p.oldHeader
-		, "newHeader"   .= p.newHeader
-		, "hunks"       .= p.hunks
-		]
+  write (Patch p) = writeObject
+    [ "oldFileName" .= p.oldFileName
+    , "newFileName" .= p.newFileName
+    , "oldHeader" .= p.oldHeader
+    , "newHeader" .= p.newHeader
+    , "hunks" .= p.hunks
+    ]
 
 newtype PatchOptions = PatchOptions
-	{ context :: Int
-	}
+  { context :: Int
+  }
 
 derive instance genericPatchOptions :: Generic PatchOptions
 
 instance showPatchOptions :: Show PatchOptions where
-	show = gShow
+  show = genericShow
 
 newtype ApplyOptions = ApplyOptions
-	{ fuzzFactor :: Int
-	, compareLine :: (Int -> String -> Modification -> String -> Boolean)
-	}
+  { fuzzFactor :: Int
+  , compareLine :: (Int -> String -> Modification -> String -> Boolean)
+  }
 
 instance showApplyOptions :: Show ApplyOptions where
-	show (ApplyOptions o) = "(ApplyOptions "
-		<> "{ fuzzFactor: "  <> show o.fuzzFactor
-		<> ", compareLine: " <> "(Int -> String -> Modification -> String -> Boolean)"
-		<> " })"
+  show (ApplyOptions o) = "(ApplyOptions "
+    <> "{ fuzzFactor: "
+    <> show o.fuzzFactor
+    <> ", compareLine: "
+    <> "(Int -> String -> Modification -> String -> Boolean)"
+    <> " })"
 
 operationToModification :: Partial => String -> Modification
-operationToModification "-"  = Removed
-operationToModification " "  = Unchanged
-operationToModification "+"  = Added
+operationToModification "-" = Removed
+operationToModification " " = Unchanged
+operationToModification "+" = Added
 operationToModification "\\" = Meta
 
 processDiffs :: Array Foreign -> Array Diff
 processDiffs diffs = runFn5 processDiffsImpl Removed Unchanged Added Diff diffs
 
 diffOptionsToForeign :: Maybe DiffOptions -> Foreign
-diffOptionsToForeign = maybe writeUndefined (\(DiffOptions o) -> toForeign o)
+diffOptionsToForeign = maybe writeUndefined (\(DiffOptions o) -> unsafeToForeign o)
 
 processPatch :: Foreign -> Patch
 processPatch patch = runFn3 processPatchImpl Hunk Patch patch
 
 patchOptionsToForeign :: Maybe PatchOptions -> Foreign
-patchOptionsToForeign = maybe writeUndefined (\(PatchOptions o) -> toForeign o)
+patchOptionsToForeign = maybe writeUndefined (\(PatchOptions o) -> unsafeToForeign o)
 
 applyOptionsToForeign :: Maybe ApplyOptions -> Foreign
 applyOptionsToForeign o =
-	maybe writeUndefined (\(ApplyOptions o) -> toForeign $ o { compareLine = convertCompareLine o.compareLine }) o
-	where
-		convertCompareLine compareLine = runFn2 convertCompareLineImpl (unsafePartialBecause "Encountered an unexpected operator while applying patch (was expecting one of: ['-', ' ', '+', '\\'])" operationToModification) compareLine
+  maybe writeUndefined (\(ApplyOptions o) -> unsafeToForeign $ o { compareLine = convertCompareLine o.compareLine }) o
+  where
+  convertCompareLine compareLine = runFn2 convertCompareLineImpl (unsafeCrashWith "Encountered an unexpected operator while applying patch (was expecting one of: ['-', ' ', '+', '\\'])" operationToModification) compareLine
 
-diff :: Fn3 String String Foreign (Array Foreign) ->
-	Maybe DiffOptions                         ->
-	String                                    ->
-	String                                    ->
-	Array Diff
+diff
+  :: Fn3 String String Foreign (Array Foreign)
+  -> Maybe DiffOptions
+  -> String
+  -> String
+  -> Array Diff
 diff fn options oldStr newStr =
-	processDiffs $ runFn3 fn oldStr newStr $ diffOptionsToForeign options
+  processDiffs $ runFn3 fn oldStr newStr $ diffOptionsToForeign options
 
 -- | Diffs two blocks of text, comparing character by character.
 diffChars :: Maybe DiffOptions -> String -> String -> Array Diff
@@ -277,13 +261,15 @@ diffCSS = diff diffCSSImpl
 -- | Diffs two JSON objects, comparing the fields defined on each. The order of
 -- | fields, etc does not matter in this comparison.
 diffJSON :: Maybe DiffOptions -> Foreign -> Foreign -> Array Diff
-diffJSON options oldObj newObj = processDiffs $
-	runFn3 diffJSONImpl oldObj newObj $ diffOptionsToForeign options
+diffJSON options oldObj newObj = processDiffs
+  $ runFn3 diffJSONImpl oldObj newObj
+  $ diffOptionsToForeign options
 
 -- | Diffs two arrays, comparing each item for strict equality (`===`).
 diffArrays :: Maybe DiffOptions -> Array Foreign -> Array Foreign -> Array Diff
-diffArrays options oldArr newArr = processDiffs $
-	runFn3 diffArraysImpl oldArr newArr $ diffOptionsToForeign options
+diffArrays options oldArr newArr = processDiffs
+  $ runFn3 diffArraysImpl oldArr newArr
+  $ diffOptionsToForeign options
 
 -- | Creates a unified diff patch string.
 -- |
@@ -295,16 +281,17 @@ diffArrays options oldArr newArr = processDiffs $
 -- | - `newStr`: New string value.
 -- | - `oldHeader`: Additional information to include in the old file header.
 -- | - `newHeader`: Additional information to include in the new file header.
-createTwoFilesPatch :: Maybe PatchOptions ->
-		       String             ->
-		       String             ->
-		       String             ->
-		       String             ->
-		       String             ->
-		       String             ->
-		       String
+createTwoFilesPatch
+  :: Maybe PatchOptions
+  -> String
+  -> String
+  -> String
+  -> String
+  -> String
+  -> String
+  -> String
 createTwoFilesPatch options oldFileName newFileName oldStr newStr oldHeader newHeader =
-	runFn7 createTwoFilesPatchImpl oldFileName newFileName oldStr newStr oldHeader newHeader $ patchOptionsToForeign options
+  runFn7 createTwoFilesPatchImpl oldFileName newFileName oldStr newStr oldHeader newHeader $ patchOptionsToForeign options
 
 -- | Creates a unified diff patch string.
 -- |
@@ -315,15 +302,16 @@ createTwoFilesPatch options oldFileName newFileName oldStr newStr oldHeader newH
 -- | - `newStr`: New string value.
 -- | - `oldHeader`: Additional information to include in the old file header.
 -- | - `newHeader`: Additional information to include in the new file header.
-createPatch :: Maybe PatchOptions ->
-	       String             ->
-	       String             ->
-	       String             ->
-	       String             ->
-	       String             ->
-	       String
+createPatch
+  :: Maybe PatchOptions
+  -> String
+  -> String
+  -> String
+  -> String
+  -> String
+  -> String
 createPatch options fileName oldStr newStr oldHeader newHeader =
-	runFn6 createPatchImpl fileName oldStr newStr oldHeader newHeader $ patchOptionsToForeign options
+  runFn6 createPatchImpl fileName oldStr newStr oldHeader newHeader $ patchOptionsToForeign options
 
 -- | Returns a raw Patch.
 -- |
@@ -336,8 +324,9 @@ createPatch options fileName oldStr newStr oldHeader newHeader =
 -- | - `oldHeader`: Additional information to include in the old file header.
 -- | - `newHeader`: Additional information to include in the new file header.
 structuredPatch :: Maybe PatchOptions -> String -> String -> String -> String -> String -> String -> Patch
-structuredPatch options oldFileName newFileName oldStr newStr oldHeader newHeader = processPatch $
-	runFn7 structuredPatchImpl oldFileName newFileName oldStr newStr oldHeader newHeader $ patchOptionsToForeign options
+structuredPatch options oldFileName newFileName oldStr newStr oldHeader newHeader = processPatch
+  $ runFn7 structuredPatchImpl oldFileName newFileName oldStr newStr oldHeader newHeader
+  $ patchOptionsToForeign options
 
 -- | Applies a unified diff patch.
 -- |
@@ -349,9 +338,9 @@ structuredPatch options oldFileName newFileName oldStr newStr oldHeader newHeade
 -- | - `compareLine(lineNumber, line, operation, patchContent)`: Callback used to compare to given lines to determine if they should be considered equal when patching. Defaults to strict equality but may be overriden to provide fuzzier comparison. Should return false if the lines should be rejected.
 applyPatch :: Maybe ApplyOptions -> String -> Either String Patch -> String
 applyPatch options source (Left diffString) =
-	runFn3 applyPatchImpl source (toForeign diff) (applyOptionsToForeign options)
+  runFn3 applyPatchImpl source (unsafeToForeign diff) (applyOptionsToForeign options)
 applyPatch options source (Right patch) =
-	runFn3 applyPatchImpl source (write patch) (applyOptionsToForeign options)
+  runFn3 applyPatchImpl source (write patch) (applyOptionsToForeign options)
 
 -- XXX applyPatches
 
