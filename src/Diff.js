@@ -1,8 +1,8 @@
 'use strict';
 
-var jsdiff = require('../../bower_components/jsdiff/diff.js');
+import { diffChars, diffWords, diffWordsWithSpace, diffLines, diffTrimmedLines, diffSentences, diffCss, diffJson, diffArrays, createTwoFilesPatch, createPatch, structuredPatch, applyPatch, parsePatch, convertChangesToXML } from '../node_modules/diff/dist/diff.js';
 
-exports.processPatchImpl = function processPatchImpl(Hunk, Patch, patch) {
+export function processPatchImpl(Hunk, Patch, patch) {
 	return Patch({
 		oldFileName: patch.oldFileName,
 		newFileName: patch.newFileName,
@@ -18,86 +18,86 @@ exports.processPatchImpl = function processPatchImpl(Hunk, Patch, patch) {
 			});
 		})
 	});
-};
+}
 
-exports.processDiffsImpl = function processDiffsImpl(Removed, Unchanged, Added, Diff, diffs) {
-	return diffs.map(function(diff) {
-		if (diff.removed) {
-			return Diff({count: diff.count, value: diff.value, modification: Removed});
-		} else if (diffs.added) {
-			return Diff({count: diff.count, value: diff.value, modification: Added});
-		} else {
-			return Diff({count: diff.count, value: diff.value, modification: Unchanged});
-		}
-	});
-};
+export function processDiffsImpl(Removed, Unchanged, Added, Diff, diffs) {
+  return diffs.map(function(diff) {
+	if (diff.removed) {
+	  return Diff({count: diff.count, value: diff.value, modification: Removed});
+	} else if (diff.added) {
+	  return Diff({count: diff.count, value: diff.value, modification: Added});
+	} else {
+	  return Diff({count: diff.count, value: diff.value, modification: Unchanged});
+	}
+  });
+}
 
-exports.convertCompareLineImpl = function convertCompareLineImpl(operationToModification, compareLine) {
+export function convertCompareLineImpl(operationToModification, compareLine) {
 	return function(lineNumber, line, operation, patchContent) {
 		return compareLine(lineNumber)(line)(operationToModification(operation))(patchContent);
 	};
-};
+}
 
-exports.diffCharsImpl = function diffCharsImpl(oldStr, newStr, options) {
-	return jsdiff.diffChar(oldStr, newStr, options);
-};
+export function diffCharsImpl(oldStr, newStr, options) {
+	return diffChars(oldStr, newStr, options);
+}
 
-exports.diffWordsImpl = function diffWordsImpl(oldStr, newStr, options) {
-	return jsdiff.diffWords(oldStr, newStr, options);
-};
+export function diffWordsImpl(oldStr, newStr, options) {
+	return diffWords(oldStr, newStr, options);
+}
 
-exports.diffWordsWithSpaceImpl = function diffWordsWithSpaceImpl(oldStr, newStr, options) {
-	return jsdiff.diffWordswithSpace(oldStr, newStr, options);
-};
+export function diffWordsWithSpaceImpl(oldStr, newStr, options) {
+	return diffWordsWithSpace(oldStr, newStr, options);
+}
 
-exports.diffLinesImpl = function diffLinesImpl(oldStr, newStr, options) {
-	return jsdiff.diffLines(oldStr, newStr, options);
-};
+export function diffLinesImpl(oldStr, newStr, options) {
+	return diffLines(oldStr, newStr, options);
+}
 
-exports.diffTrimmedLinesImpl = function diffTrimmedLinesImpl(oldStr, newStr, options) {
-	return jsdiff.diffTrimmedLines(oldStr, newStr, options);
-};
+export function diffTrimmedLinesImpl(oldStr, newStr, options) {
+	return diffTrimmedLines(oldStr, newStr, options);
+}
 
-exports.diffSentencesImpl = function diffSentencesImpl(oldStr, newStr, options) {
-	return jsdiff.diffSentences(oldStr, newStr, options);
-};
+export function diffSentencesImpl(oldStr, newStr, options) {
+	return diffSentences(oldStr, newStr, options);
+}
 
-exports.diffCSSImpl = function diffCSSImpl(oldStr, newStr, options) {
-	return jsdiff.diffCss(oldStr, newStr, options);
-};
+export function diffCSSImpl(oldStr, newStr, options) {
+	return diffCss(oldStr, newStr, options);
+}
 
-exports.diffJSONImpl = function diffJSONImpl(oldObj, newObj, options) {
-	return jsdiff.diffJson(oldObj, newObj, options);
-};
+export function diffJSONImpl(oldObj, newObj, options) {
+	return diffJson(oldObj, newObj, options);
+}
 
-exports.diffArraysImpl = function diffArraysImpl(oldArr, newArr, options) {
-	return jsdiff.diffArrays(oldArr, newArr, options);
-};
+export function diffArraysImpl(oldArr, newArr, options) {
+	return diffArrays(oldArr, newArr, options);
+}
 
-exports.createTwoFilesPatchImpl = function createTwoFilesPatchImpl(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options) {
-	return jsdiff.createTwoFilesPath(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options);
-};
+export function createTwoFilesPatchImpl(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options) {
+	return createTwoFilesPath(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options);
+}
 
-exports.createPatchImpl = function createPatchImpl(fileName, oldStr, newStr, oldHeader, newHeader, options) {
-	return jsdiff.createPatch(fileName, oldStr, newStr, oldHeader, newheader, options);
-};
+export function createPatchImpl(fileName, oldStr, newStr, oldHeader, newHeader, options) {
+	return createPatch(fileName, oldStr, newStr, oldHeader, newHeader, options);
+}
 
-exports.structuredPatchImpl = function structuredPatchImpl(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options) {
-	return jsdiff.structuredPatch(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options);
-};
+export function structuredPatchImpl(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options) {
+	return structuredPatch(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options);
+}
 
-exports.applyPatchImpl = function applyPatchImpl(source, patch, options) {
-	return jsdiff.applyPatch(source, patch);
-};
+export function applyPatchImpl(source, patch, options) {
+  return applyPatch(source, patch, options);
+}
 
-exports.parsePatchImpl = function parsePatchImpl(Left, Right, diffString) {
+export function parsePatchImpl(Left, Right, diffString) {
 	try {
-		return Right(jsdiff.parsePatch(diffString));
+		return Right(parsePatch(diffString));
 	} catch (err) {
 		return Left(err);
 	}
-};
+}
 
-exports.convertChangesToXMLImpl = function convertChangesToXMLImpl(diffs) {
-	return jsdiff.convertChangesToXML(diffs);
-};
+export function convertChangesToXMLImpl(diffs) {
+	return convertChangesToXML(diffs);
+}

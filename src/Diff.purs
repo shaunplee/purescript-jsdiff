@@ -1,5 +1,6 @@
 module Diff
-  ( Modification(Removed, Unchanged, Added, Meta)
+  ( ApplyOptions
+  , Modification(Removed, Unchanged, Added, Meta)
   , Diff(Diff)
   , DiffOptions(DiffOptions)
   , Hunk(Hunk)
@@ -28,12 +29,12 @@ import Data.Either (Either(Left, Right))
 import Data.Eq.Generic (genericEq)
 import Data.Function.Uncurried (Fn2, Fn3, Fn5, Fn6, Fn7, runFn2, runFn3, runFn5, runFn6, runFn7)
 import Data.Generic.Rep (class Generic)
-import Data.Maybe (Maybe, maybe)
+import Data.Maybe (Maybe(..))
 import Data.Ord.Generic (genericCompare)
 import Data.Show.Generic (genericShow)
 import Effect.Exception (Error)
 import Foreign (Foreign, unsafeToForeign)
-import Partial.Unsafe (unsafeCrashWith)
+import Partial.Unsafe (unsafePartial)
 
 foreign import processDiffsImpl :: Fn5 Modification Modification Modification ({ value :: String, modification :: Modification, count :: Int } -> Diff) (Array Foreign) (Array Diff)
 foreign import processPatchImpl :: Fn3 ({ oldStart :: Int, oldLines :: Int, newStart :: Int, newLines :: Int, lines :: Array String } -> Hunk) ({ oldFileName :: String, newFileName :: String, oldHeader :: String, newHeader :: String, hunks :: Array Hunk } -> Patch) Foreign Patch
@@ -55,6 +56,8 @@ foreign import applyPatchImpl :: Fn3 String Foreign Foreign String
 foreign import parsePatchImpl :: forall a b. Fn3 (a -> Either a b) (b -> Either a b) String (Either Error Foreign)
 foreign import convertChangesToXMLImpl :: Array Diff -> String
 
+foreign import data Undefined :: Type -> Type
+
 -- XXX Document types.
 
 -- I have no idea if `Meta` is actually what it's called, or if it's even a
@@ -63,7 +66,7 @@ foreign import convertChangesToXMLImpl :: Array Diff -> String
 -- "\\ No newline at end of file".
 data Modification = Removed | Unchanged | Added | Meta
 
-derive instance genericModification :: Generic Modification
+derive instance genericModification :: Generic Modification _
 
 instance showModification :: Show Modification where
   show Removed = "(Removed)"
@@ -96,7 +99,7 @@ newtype Diff = Diff
   , count :: Int
   }
 
-derive instance genericDiff :: Generic Diff
+derive instance genericDiff :: Generic Diff _
 
 instance showDiff :: Show Diff where
   show = genericShow
@@ -112,7 +115,7 @@ newtype DiffOptions = DiffOptions
   , newlineIsToken :: Boolean
   }
 
-derive instance genericDiffOptions :: Generic DiffOptions
+derive instance genericDiffOptions :: Generic DiffOptions _
 
 instance showDiffOptions :: Show DiffOptions where
   show = genericShow
@@ -125,7 +128,7 @@ newtype Hunk = Hunk
   , lines :: Array String
   }
 
-derive instance genericHunk :: Generic Hunk
+derive instance genericHunk :: Generic Hunk _
 
 instance showHunk :: Show Hunk where
   show = genericShow
@@ -136,14 +139,14 @@ instance eqHunk :: Eq Hunk where
 instance ordHunk :: Ord Hunk where
   compare = genericCompare
 
-instance asForeignHunk :: AsForeign Hunk where
-  write (Hunk h) = writeObject
-    [ "oldStart" .= h.oldStart
-    , "oldLines" .= h.oldLines
-    , "newStart" .= h.newStart
-    , "newLines" .= h.newLines
-    , "lines" .= h.lines
-    ]
+-- instance asForeignHunk :: AsForeign Hunk where
+--   write (Hunk h) = writeObject
+--     [ "oldStart" .= h.oldStart
+--     , "oldLines" .= h.oldLines
+--     , "newStart" .= h.newStart
+--     , "newLines" .= h.newLines
+--     , "lines" .= h.lines
+--     ]
 
 newtype Patch = Patch
   { oldFileName :: String
@@ -153,7 +156,7 @@ newtype Patch = Patch
   , hunks :: Array Hunk
   }
 
-derive instance genericPatch :: Generic Patch
+derive instance genericPatch :: Generic Patch _
 
 instance showPatch :: Show Patch where
   show = genericShow
@@ -164,26 +167,30 @@ instance eqPatch :: Eq Patch where
 instance ordPatch :: Ord Patch where
   compare = genericCompare
 
-instance asForeignPatch :: AsForeign Patch where
-  write (Patch p) = writeObject
-    [ "oldFileName" .= p.oldFileName
-    , "newFileName" .= p.newFileName
-    , "oldHeader" .= p.oldHeader
-    , "newHeader" .= p.newHeader
-    , "hunks" .= p.hunks
-    ]
+write :: Patch -> Foreign
+write (Patch p) = unsafeToForeign p
+
+-- instance asForeignPatch :: AsForeign Patch where
+--   write (Patch p) = writeObject
+--     [ "oldFileName" .= p.oldFileName
+--     , "newFileName" .= p.newFileName
+--     , "oldHeader" .= p.oldHeader
+--     , "newHeader" .= p.newHeader
+--     , "hunks" .= p.hunks
+--     ]
 
 newtype PatchOptions = PatchOptions
   { context :: Int
   }
 
-derive instance genericPatchOptions :: Generic PatchOptions
+derive instance genericPatchOptions :: Generic PatchOptions _
 
 instance showPatchOptions :: Show PatchOptions where
   show = genericShow
 
 newtype ApplyOptions = ApplyOptions
   { fuzzFactor :: Int
+  , autoConvertLineEndings :: Boolean
   , compareLine :: (Int -> String -> Modification -> String -> Boolean)
   }
 
@@ -191,6 +198,8 @@ instance showApplyOptions :: Show ApplyOptions where
   show (ApplyOptions o) = "(ApplyOptions "
     <> "{ fuzzFactor: "
     <> show o.fuzzFactor
+    <> ", autoConvertLineEndings: "
+    <> show o.autoConvertLineEndings
     <> ", compareLine: "
     <> "(Int -> String -> Modification -> String -> Boolean)"
     <> " })"
@@ -205,19 +214,25 @@ processDiffs :: Array Foreign -> Array Diff
 processDiffs diffs = runFn5 processDiffsImpl Removed Unchanged Added Diff diffs
 
 diffOptionsToForeign :: Maybe DiffOptions -> Foreign
-diffOptionsToForeign = maybe writeUndefined (\(DiffOptions o) -> unsafeToForeign o)
+diffOptionsToForeign Nothing = unsafeToForeign {}
+diffOptionsToForeign (Just (DiffOptions diffOpts)) = unsafeToForeign diffOpts
 
 processPatch :: Foreign -> Patch
 processPatch patch = runFn3 processPatchImpl Hunk Patch patch
 
 patchOptionsToForeign :: Maybe PatchOptions -> Foreign
-patchOptionsToForeign = maybe writeUndefined (\(PatchOptions o) -> unsafeToForeign o)
+patchOptionsToForeign Nothing = unsafeToForeign {}
+patchOptionsToForeign (Just (PatchOptions po)) = unsafeToForeign po
 
 applyOptionsToForeign :: Maybe ApplyOptions -> Foreign
-applyOptionsToForeign o =
-  maybe writeUndefined (\(ApplyOptions o) -> unsafeToForeign $ o { compareLine = convertCompareLine o.compareLine }) o
+applyOptionsToForeign Nothing = unsafeToForeign {}
+applyOptionsToForeign (Just (ApplyOptions o)) = unsafeToForeign $
+  o { compareLine = convertCompareLine o.compareLine }
   where
-  convertCompareLine compareLine = runFn2 convertCompareLineImpl (unsafeCrashWith "Encountered an unexpected operator while applying patch (was expecting one of: ['-', ' ', '+', '\\'])" operationToModification) compareLine
+  convertCompareLine compareLine = runFn2 convertCompareLineImpl
+    --(unsafeCrashWith "Encountered an unexpected operator while applying patch (was expecting one of: ['-', ' ', '+', '\\'])" operationToModification)
+    (unsafePartial operationToModification)
+    compareLine
 
 diff
   :: Fn3 String String Foreign (Array Foreign)
@@ -338,7 +353,7 @@ structuredPatch options oldFileName newFileName oldStr newStr oldHeader newHeade
 -- | - `compareLine(lineNumber, line, operation, patchContent)`: Callback used to compare to given lines to determine if they should be considered equal when patching. Defaults to strict equality but may be overriden to provide fuzzier comparison. Should return false if the lines should be rejected.
 applyPatch :: Maybe ApplyOptions -> String -> Either String Patch -> String
 applyPatch options source (Left diffString) =
-  runFn3 applyPatchImpl source (unsafeToForeign diff) (applyOptionsToForeign options)
+  runFn3 applyPatchImpl source (unsafeToForeign diffString) (applyOptionsToForeign options)
 applyPatch options source (Right patch) =
   runFn3 applyPatchImpl source (write patch) (applyOptionsToForeign options)
 
