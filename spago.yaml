@@ -1,12 +1,15 @@
 package:
+  name: jsdiff
   dependencies:
     - console
     - effect
     - exceptions
     - foreign
     - prelude
-  name: jsdiff
+  test:
+    main: Test.Main
+    dependencies: []
 workspace:
-  extraPackages: {}
   packageSet:
-    url: https://raw.githubusercontent.com/purescript/package-sets/psc-0.15.15-20240701/packages.json
+    registry: 53.2.0
+  extraPackages: {}
