@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-24.05-darwin";
     purescript-overlay = {
-      url = "github:thomashoneyman/purescript-overlay";
+      url = "github:thomashoneyman/purescript-overlay/8e6a9a4eceab6dd41ca3d1710ba2d06adc1e292e";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
